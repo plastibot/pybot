@@ -76,16 +76,35 @@ def main():
       msg_out = 'The current time is ' + time.strftime('%I:%M %p')
       current_action = ''
 
-    # User asked robot to walk
-    if current_action == 'walk':
-      msg_out = 'Walking'
+    # User asked robot to step forward
+    if current_action == 'step forward':
+      msg_out = 'Walking forward'
+      ser.write("1,1=".encode())
+      current_action = ''
+
+    # User asked robot to step back
+    if current_action == 'step back':
+      msg_out = 'stepping back'
+      ser.write("1,2=".encode())
+      current_action = ''
+
+    # User asked robot to move left
+    if current_action == 'step left':
+      msg_out = 'Moving to the left'
       ser.write("1,5=".encode())
       current_action = ''
+
+    # User asked robot to move right
+    if current_action == 'step right':
+      msg_out = 'moving to the right'
+      ser.write("1,6=".encode())
+      current_action = ''
+
 
     # User asked robot to wave
     if current_action == 'wave':
       msg_out = 'Waving'
-      ser.write("1,7=".encode())
+      ser.write("2,2=".encode())
       current_action = ''
 
     print(msg_out)
