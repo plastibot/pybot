@@ -13,7 +13,8 @@ from neopixel import *
 from watson_developer_cloud import SpeechToTextV1 as SpeechToText
 from watson_developer_cloud import ConversationV1
 from watson_developer_cloud import TextToSpeechV1
-
+from watson_developer_cloud import VisualRecognitionV3 as VisualRecognition
+import picamera
 
 # LED strip configuration:
 LED_COUNT      = 7      # Number of LED pixels.
@@ -94,6 +95,31 @@ def speak(tts, text):
     p.terminate
 
 
+def watch_for_objects(vr):
+    #capture image
+    camera.capture('image.jpg')
+
+    with open('./image.jpg', 'rb') as images_file:
+        analysis = vr.classify(images_file,
+                parameters = json.dumps({'classifier_ids': ["default"]}))
+
+    print(json.dumps(analysis, indent=2))
+
+    return analysis
+
+
+def watch_for_people(vr):
+    #capture image
+    camera.capture('image.jpg')
+
+    with open('./image.jpg', 'rb') as images_file:
+        analysis = vr.detect_faces(images_file)
+
+    print(json.dumps(analysis, indent=2))
+
+    return analysis
+
+    
     
 def audioRecorderCallback(fname):
     print("converting audio to text")
@@ -236,6 +262,46 @@ def audioRecorderCallback(fname):
         msg_out = 'standing by'
         ser.write("1,99=".encode())
         current_action = ''
+
+    if current_action == 'watch':
+        speak(tts, 'watching')
+        findings = watch_for_objects(vr)
+        response = findings['images'][0]['classifiers'][0]['classes']
+        current_action=''
+        answer = ""
+        score = 0
+        for r in range(0, len(response)):
+            if response[r]['score'] > score:
+                answer = response[r]['class']
+                score = response[r]['score']
+        msg_out="I'm {:.0%} certain that I see a {}".format(score, answer)
+
+
+    if current_action == 'person':
+        speak(tts, 'Checking for people')
+        findings = watch_for_people(vr)
+        response = findings['images'][0]['faces']
+        current_action=''
+        closer_face_index = 0
+        closer_face_width = 0
+        for r in range(0, len(response)):
+            if response[r]['face_location']['width'] > closer_face_width:
+                closer_face_index = r
+                closer_face_width = response[r]['face_location']['width']
+        face_x = response[closer_face_index]['face_location']['left'] + response[closer_face_index]['face_location']['width']/2
+        if face_x < 360:
+            x_loc = "left"
+        else:
+            x_loc = "right"
+        face_y = response[closer_face_index]['face_location']['top'] - response[closer_face_index]['face_location']['height']/2
+        gender = response[closer_face_index]['gender']['gender']
+        age_min = response[closer_face_index]['age']['min']
+        age_max = response[closer_face_index]['age']['max']
+
+        
+        msg_out="I see a {} person between {} and {} years old, located to my {}".format(gender, age_min, age_max, x_loc)
+
+
         
     print(msg_out)
 
@@ -289,11 +355,23 @@ tts = TextToSpeechV1(
     password=os.environ.get("TTS_PASSWORD"),
     x_watson_learning_opt_out=True) # Optional flag
 
+vr = VisualRecognition(
+    api_key=os.environ.get("VISUALRECOGNITION_API"),
+    version='2016-05-20')
+
+classifier_id = os.environ.get("CLASSIFIER_ID")
+
+
 # Create NeoPixel object with appropriate configuration.
 strip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS)
 # Intialize the library (must be called once before other functions).
 strip.begin()
 
+#Initiaize the camera
+camera = picamera.PiCamera()
+
+#camera needs to be rotated as it is upside-down
+camera.rotation = 180
 
 # capture SIGINT signal, e.g., Ctrl+C
 signal.signal(signal.SIGINT, signal_handler)
